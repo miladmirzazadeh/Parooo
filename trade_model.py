@@ -5,12 +5,21 @@ from khayyam import JalaliDate, JalaliDatetime
 def add_diff_min_max(df): 
     df["diff_min_max"] = (df['max']-df['min'])*100/(df['min'])
 
-def add_diff_open(df):
-    df["diff_open"] = (df['lastday']-df['open'])*100/(df['lastday'])
+def add_diff_ending(df):
+    df["diff_open"] = (df['lastday']-df['ending'])*100/(df['lastday'])
 
-def add_adjusted(df):
-    pass
-
+def add_adjust_scale(df_symbol):
+    lastdays = df_symbol["lastday"].copy().drop(df_symbol.index[0])
+    endings = df_symbol["ending"].copy().drop(df_symbol.index[-1])
+    endings.index = lastdays.index
+    scale = lastdays/endings
+    scale[df_symbol.index[0]] = 1
+    df_symbol.loc[:, "adj_scale"] = scale
+    
+def add_adjust(df):
+    adj = df.loc[df["adj_scale"] < 1].index
+    print(adj[0])
+    
 class DataModel:
     def __init__(self,data_location, file_names=[]):  
         self.data_location = data_location;
@@ -26,12 +35,13 @@ class DataModel:
             dfs.append(self.__read_csv(name))
         self.df = pd.concat(dfs, ignore_index=True)
         add_diff_min_max(self.df)
-        add_diff_open(self.df)
-#         self.df = add_adjusted(self.df)
+        add_diff_ending(self.df)
         self.df = self.df.set_index('date')
-
+#         print("hi")
+#         self.df = self.df.groupby("symbol").apply(add_adjust_scale)
 #         self.allSymbols = self.df.symbol.tolist()
 #         self.symbols = list(set(self.df.symbol))[1:]
+#         for symbol in self.symbols:
 #         counts = Counter(self.allSymbols)
 #         testSymbols = []
 #         tmpSymbols = []

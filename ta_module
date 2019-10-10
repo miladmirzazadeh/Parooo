@@ -1,4 +1,16 @@
 
+
+import pandas as pd
+import numpy as np
+import plotly.graph_objects as go
+from datetime import datetime
+from math import pi
+import math
+import trade_model as td
+import matplotlib.pyplot as plt
+
+
+
 def find_supports(firstdate,lastdate,stockname="خساپا",minimum_touch=3):
     dm=td.DataModel("../xcels",["master0.csv","master1.csv"])
     dm.read()
@@ -15,13 +27,7 @@ def find_supports(firstdate,lastdate,stockname="خساپا",minimum_touch=3):
             if (minimum<=min(stocko[j-10:j+10]) and minimum<=min(stockc[j-10:j+10])):
                 lows.append(j)
                 lows_price.append(minimum)
-            
-            
-    my_min=pd.DataFrame(columns=["X","Y"])
-    my_min["X"]=lows
-    my_min["Y"]=lows_price
-    my_min.to_csv("./minimums.csv")
-            
+
         #finding the best lines 
     # cnt = numbers of line segments
     cnt=0
