@@ -8,6 +8,9 @@ verify_ssl = true
 [packages]
 pytest = "*"
 pytest-flake8 = "*"
+pystore = "*"
+dask = "*"
+fsspec = "*"
 
 [requires]
 python_version = "3.6"

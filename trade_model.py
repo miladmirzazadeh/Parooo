@@ -1,6 +1,9 @@
 import numpy as np
 import pandas as pd
 from khayyam import JalaliDate, JalaliDatetime
+import pystore
+
+
 
 def add_diff_min_max(df): 
     df["diff_min_max"] = (df['max']-df['min'])*100/(df['min'])
@@ -43,11 +46,13 @@ class DataModel:
     def __init__(self,data_location, file_names=[]):  
         self.data_location = data_location;
         self.file_names = file_names;
-    
+        pystore.set_path('/home/nimac/.pystore')
+        self.store = pystore.store('tradion_store')
+        self.collection = self.store.collection('boors')
+
     def __read_csv(self, file_name):
         return pd.read_csv(f'{self.data_location}/{file_name}', sep=',',header=[0], parse_dates=["date"])
 
-#     TODO: use pystore instead
     def read(self):
         dfs = []
         for name in self.file_names:
@@ -56,6 +61,7 @@ class DataModel:
         add_diff_min_max(self.df)
         add_diff_ending(self.df)
         self.df = self.df.set_index('date')
+        
 #         print("hi")
 #         self.df = self.df.groupby("symbol").apply(add_adjust_scale)
 #         self.allSymbols = self.df.symbol.tolist()
@@ -73,7 +79,13 @@ class DataModel:
 #             tmpSymbols.remove(tmpSymbols[ran])
 #         print("test symbol", len(testSymbols))
 
-
+    def store_in_pystore(self):
+        self.collection.write('ALL', self.df, metadata={'source': 'tsetmc'}, overwrite=True)
+    
+    def restore_from_pystore(self):
+        self.item = collection.item('ALL')
+        self.df = item.to_pandas()
+    
     def get(self, symbol, start="", end=""):
         
         if start == "":
