@@ -1,4 +1,4 @@
-
+import numpy as np
 import pandas as pd
 from khayyam import JalaliDate, JalaliDatetime
 
@@ -18,9 +18,28 @@ def add_adjust_scale(df_symbol):
     
 def add_adjust(df):
     adj = df.loc[df["adj_scale"] < 1].index
-    print(adj[0])
-    
+    df["adj_open"] = df["open"]
+    df["adj_close"] = df["close"]
+    df["adj_ending"] = df["ending"]
+    df["adj_min"] = df["min"]
+    df["adj_max"] = df["max"]
+    adj_headers = ["adj_min", "adj_max", "adj_close", "adj_open", "adj_ending"]
+    for date in adj:
+        scale = df.loc[date, "adj_scale"]
+        df.loc[df.index[0]:date, adj_headers] = df.loc[df.index[0]:date, adj_headers].transform(lambda x: x * scale)
+
+def add_log_adj(df):
+    adj = df.loc[df["adj_scale"] < 1].index
+    df["log_adj_open"] = np.log10(df["adj_open"])
+    df["log_adj_close"] = np.log10(df["adj_close"])
+    df["log_adj_ending"] = np.log10(df["adj_ending"])
+    df["log_adj_min"] = np.log10(df["adj_min"])
+    df["log_adj_max"] = np.log10(df["adj_max"])
+
 class DataModel:
+    TA_SYMBOLS = ["خپارس", "خكاوه", "فاسمين", "شبريز", "ونوين", "كنور", "ثشرق", "كاما", "ورنا", "خمحركه", "دامين",
+                  "خاور", "خپارس", "خودرو", "فجام", "وبصادر"]
+
     def __init__(self,data_location, file_names=[]):  
         self.data_location = data_location;
         self.file_names = file_names;
@@ -68,4 +87,17 @@ class DataModel:
             e_date = end.split("-")
             end = JalaliDate(e_date[0], e_date[1], e_date[2]).todate()
         tmpdf = self.df.loc[start:end]
-        return tmpdf.loc[tmpdf["symbol"]==symbol].copy()
+        df = tmpdf.loc[tmpdf["symbol"]==symbol].copy()
+        add_adjust_scale(df)
+        add_adjust(df)
+        add_log_adj(df)
+        return df
+    
+    def check_contains_name(self, symbol):
+        dm.df.loc[dm.df["symbol"].str.contains(symbol)==True]
+        
+    def get_overal_corr(self, symbols):
+        df_corr = pd.DataFrame()
+        for symbol in symbols:
+            df_corr[f'{symbol}_log_adj_ending'] = self.get(symbol)["log_adj_ending"]
+        return df_corr.corr()
