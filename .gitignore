@@ -4,3 +4,5 @@ Data
 Data/*
 __pycache__
 *.csv
+models/others/*
+*.log
