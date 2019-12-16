@@ -12,35 +12,42 @@ def add_diff_ending(df):
     df.loc[:, "diff_open"] = (df['lastday']-df['ending'])*100/(df['lastday'])
 
 def add_adjust_scale(df_symbol):
-    lastdays = df_symbol["lastday"].copy().drop(df_symbol.index[0])
-    endings = df_symbol["ending"].copy().drop(df_symbol.index[-1])
-    endings.index = lastdays.index
-    scale = lastdays/endings
-    scale.loc[df_symbol.index[0]] = 1
-    df_symbol.loc[:, "adj_scale"] = scale.values
+    new_part = pd.isna(df_symbol["adj_scale"])
+    if new_part.sum() > 0:
+        lastdays = df_symbol.loc[new_part, "lastday"].copy()
+        lastday = lastdays.drop(lastday.index[0])
+        endings = df_symbol.loc[new_part, "ending"].copy()
+        endings = endings.drop(endings.index[-1])
+        endings.index = lastdays.index
+        scale = lastdays/endings
+        scale.loc[endings.index[0]] = 1
+        df_symbol.loc[new_part, "adj_scale"] = scale.values
     
 def add_adjust(df):
     new_part = pd.isna(df["adj_ending"])
     logger.debug(f"new part len is {new_part.sum()}, shape: {new_part.shape}")
-    adj = df.loc[np.logical_and(df["adj_scale"] < 1, new_part)].index
-    df.loc[new_part, "adj_open"] = df.loc[new_part, "open"]
-    df.loc[new_part, "adj_close"] = df.loc[new_part, "close"]
-    df.loc[new_part, "adj_ending"] = df.loc[new_part, "ending"]
-    df.loc[new_part, "adj_min"] = df.loc[new_part, "min"]
-    df.loc[new_part, "adj_max"] = df.loc[new_part, "max"]
-    adj_headers = ["adj_min", "adj_max", "adj_close", "adj_open", "adj_ending"]
-    for date in adj:
-        logger.debug(f"found adj date: {date}")
-        scale = df.loc[date, "adj_scale"]
-        df.loc[df.index[0]:date, adj_headers] = df.loc[df.index[0]:date, adj_headers] * scale
+    if new_part.sum() > 0:
+        adj = df.loc[np.logical_and(df["adj_scale"] < 1, new_part)].index
+        df.loc[new_part, "adj_open"] = df.loc[new_part, "open"]
+        df.loc[new_part, "adj_close"] = df.loc[new_part, "close"]
+        df.loc[new_part, "adj_ending"] = df.loc[new_part, "ending"]
+        df.loc[new_part, "adj_min"] = df.loc[new_part, "min"]
+        df.loc[new_part, "adj_max"] = df.loc[new_part, "max"]
+        adj_headers = ["adj_min", "adj_max", "adj_close", "adj_open", "adj_ending"]
+        for date in adj:
+            logger.debug(f"found adj date: {date}")
+            scale = df.loc[date, "adj_scale"]
+            df.loc[df.index[0]:date, adj_headers] = df.loc[df.index[0]:date, adj_headers] * scale
 
 def add_log_adj(df):
-    adj = df.loc[df["adj_scale"] < 1].index
-    df.loc[:, "log_adj_open"] = np.log10(np.maximum(df["adj_open"], 1))
-    df.loc[:, "log_adj_close"] = np.log10(np.maximum(df["adj_close"], 1))
-    df.loc[:, "log_adj_ending"] = np.log10(np.maximum(df["adj_ending"], 1))
-    df.loc[:, "log_adj_min"] = np.log10(np.maximum(df["adj_min"], 1))
-    df.loc[:, "log_adj_max"] = np.log10(np.maximum(df["adj_max"], 1))
+    new_part = pd.isna(df["adj_ending"])
+    if new_part.sum() > 0:
+        adj = df.loc[np.logical_and(df["adj_scale"] < 1, new_part)].index
+        df.loc[new_part, "log_adj_open"] = np.log10(np.maximum(df.loc[new_part, "adj_open"], 1))
+        df.loc[new_part, "log_adj_close"] = np.log10(np.maximum(df.loc[new_part, "adj_close"], 1))
+        df.loc[new_part, "log_adj_ending"] = np.log10(np.maximum(df.loc[new_part, "adj_ending"], 1))
+        df.loc[new_part, "log_adj_min"] = np.log10(np.maximum(df.loc[new_part, "adj_min"], 1))
+        df.loc[new_part, "log_adj_max"] = np.log10(np.maximum(df.loc[new_part, "adj_max"], 1))
 
 def adjust_and_log(df):
     logger.debug("calculating scale")
@@ -49,7 +56,7 @@ def adjust_and_log(df):
     add_adjust(df)
     logger.debug("adding log")
     add_log_adj(df)
-    logger.debug(f"done ajd and log for {df.symbol[0]}")
+    logger.debug(f"done adj and log")
     return df
 
 class DataModel:
@@ -69,19 +76,18 @@ class DataModel:
                            parse_dates=["date"])
     
     def adjust_all(self):
-        logger.debug(f"number of symbols for adjust: {len(self.symbols)}")
+        logger.info(f"number of symbols for adjust: {len(self.symbols)}")
         for i in trange(len(self.symbols)):
-            try:                
+            try:
                 df = self.df.loc[self.df["symbol"]==self.symbols[i]].copy()
                 if df.shape[0] > 0:
-                    logger.debug(f"start ajd and log for {self.symbols[i]}---->{i}")
+                    logger.debug(f"start adj and log for {self.symbols[i]}---->{i}")
                     df = adjust_and_log(df)
                     self.df.loc[self.df["symbol"]==self.symbols[i]] = df
                 else:
                     logger.debug(f"empty df in adjust all {self.symbols[i]}---->{i}")
             except:
                 logger.error(f'cant adjust {i}-th symbol---->{self.symbols[i]}', feature='f-strings')
-                raise Exception('WTF')
     
     def initialize(self):
         add_diff_min_max(self.df)
@@ -94,6 +100,7 @@ class DataModel:
         for col in other_headers:
             if col not in self.df.columns:
                 self.df[col] = np.nan
+        self.df.drop_duplicates(subset=["symbol", "name", "year", "month", "day"], keep="last",inplace=True)
             
     def update_df_extensions(self):
         self.initialize()

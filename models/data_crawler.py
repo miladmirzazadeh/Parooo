@@ -91,7 +91,7 @@ class Converter:
                 df.to_csv(f'{self.excel_location}/{excel_filename}.csv', encoding='utf-8', index=False, 
                           header=self.HEADER)
         except:
-            logger.debug("FUKKKK")
+            logger.error(f"convert and save problem for file {excel_filename}")
             df = str(excel_filename)
         finally:
             return df
@@ -99,18 +99,18 @@ class Converter:
     def converting_thread(self, thread_name, q_xls, q_dfs, q_errors):
         while True:
             file_names = q_xls.get()
-            logger.debug(f"conv---{file_names}", feature="f-strings")
+            logger.info(f"conv---{file_names}")
             for name in file_names:
-                logger.debug("conv_do", feature="f-strings")
+                logger.debug("conv_do")
                 tmp = self.convert_and_save(excel_filename=name, return_all=True)
-                logger.debug("conv_done", feature="f-strings")
+                logger.debug("conv_done")
                 if isinstance(tmp, str):
                     q_errors.put(tmp)
                 else:
                     logger.debug(f"add a df to q: {name}")
                     q_dfs.put((tmp.copy(), name))
             q_xls.task_done()
-            logger.debug("thread convert done", feature="f-strings")
+            logger.info("thread convert done", feature="f-strings")
 
     def cleaner(self):
         for name in names:
@@ -160,48 +160,49 @@ class Crawl2DF:
         self.converter = Converter(excel_location=self.excel_location)
 
     def run(self):
-        logger.debug("run-triggered")
-        with open(f'{self.excel_location}/crawlstat', 'r') as statfile:
-            lines = statfile.readlines()
-            year, month, day = lines[3].split("-")
+        logger.info("run-triggered")
+        if os.path.exists(f'{self.excel_location}/crawlstat'):
+            with open(f'{self.excel_location}/crawlstat', 'r') as statfile:
+                lines = statfile.readlines()
+                year, month, day = lines[3].split("-")
+                crawl_start_date = JalaliDate(year, month, day)
+            logger.info(f"statefile: {str(crawl_start_date)}  {year}-{month}-{day}", feature="f-strings")
+        else:
+            year, month, day = self.START_DATE.split("-")
             crawl_start_date = JalaliDate(year, month, day)
-        logger.debug(f"statefile: {str(crawl_start_date)}  {year}-{month}-{day}", feature="f-strings")
         self.dm = DataModel()
         self.dm.restore_from_pystore()
-        logger.debug("restore done")
+        logger.info("restore done")
         if len(self.dm.df) == 0:
             conv_start_date = self.START_DATE
         else:
             conv_start_date = f'''{self.dm.df.iloc[-1].year}-{self.dm.df.iloc[-1].month}-{self.dm.df.iloc[-1].day} '''
         st_year, st_month, st_day = conv_start_date.split("-")
         st = JalaliDate(st_year, st_month, st_day) + timedelta(days=1)
-        logger.debug(f"start date: {str(st)}")
+        logger.info(f"start date: {str(st)}")
         while st <= crawl_start_date:
             excel_file = f'{self.excel_location}/{st.year}-{st.month}-{st.day}.xlsx'
-            logger.debug(f'excel_file: {excel_file}', feature="f-strings")
+            logger.debug(f'excel_file: {excel_file}')
             if os.path.isfile(excel_file):
-                logger.debug(f'found: {st.year}-{st.month}-{st.day}', feature="f-strings")
+                logger.debug(f'found: {st.year}-{st.month}-{st.day}')
                 self.q_xls.put([f'{st.year}-{st.month}-{st.day}'])
             st = st + timedelta(days=1)
         
-        logger.debug("preparing done")
+        logger.info("preparing done")
         for i in range(self.NUM_CONV_THREAD):
             self.conv_workers.append(multiprocessing.Process(target=self.converter.converting_thread, args=(f'Thread-i', 
                     self.q_xls, self.q_dfs, self.q_errors)))
             self.conv_workers[i].start()
-        logger.debug("df conv started")
+        logger.info("df conv started")
         self.crawl_thread = multiprocessing.Process(target=self.crawler.crawling_thread,
                                                     args=("Thread-crawl", crawl_start_date.todate(), self.q_xls))
         self.crawl_thread.start()
-        logger.debug("df crawler started")
-        
-        logger.debug("starting df updater")
-        
+        logger.info("df crawler started")
         all_dfs = []
         time.sleep(10)
         while True:
             dftmp, nametmp = self.q_dfs.get()
-            logger.debug(f'got a df: {nametmp}', feature="f-strings")
+            logger.info(f'got a df: {nametmp}')
             year, month, day = nametmp.split("-")
             date = JalaliDate(year, month, day).todate()
             yearlist = np.full(len(dftmp), year).tolist()
@@ -224,10 +225,10 @@ class Crawl2DF:
                 dm_new.read_from_df(pd.concat(all_dfs).sort_index())
                 self.dm.df = self.dm.df.append(dm_new.df)
                 all_dfs = []
-                logger.debug(f'storing in pystore', feature="f-strings")
+                logger.info(f'storing in pystore')
                 self.dm.update_df_extensions()
                 self.dm.store_in_pystore()
-                logger.debug(f'stored in pystore', feature="f-strings")
+                logger.info(f'stored in pystore')
 
     def save(self):
         self.dm.df.sort_values(by=['date'], inplace=True)
