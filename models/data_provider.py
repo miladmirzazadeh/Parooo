@@ -21,6 +21,7 @@ def add_adjust_scale(df_symbol):
     
 def add_adjust(df):
     new_part = pd.isna(df["adj_ending"])
+    logger.debug(f"new part len is {new_part.sum()}, shape: {new_part.shape}")
     adj = df.loc[np.logical_and(df["adj_scale"] < 1, new_part)].index
     df.loc[new_part, "adj_open"] = df.loc[new_part, "open"]
     df.loc[new_part, "adj_close"] = df.loc[new_part, "close"]
@@ -29,6 +30,7 @@ def add_adjust(df):
     df.loc[new_part, "adj_max"] = df.loc[new_part, "max"]
     adj_headers = ["adj_min", "adj_max", "adj_close", "adj_open", "adj_ending"]
     for date in adj:
+        logger.debug(f"found adj date: {date}")
         scale = df.loc[date, "adj_scale"]
         df.loc[df.index[0]:date, adj_headers] = df.loc[df.index[0]:date, adj_headers] * scale
 
@@ -141,6 +143,7 @@ class DataModel:
             end = JalaliDate(e_date[0], e_date[1], e_date[2]).todate()
         tmpdf = self.df.loc[self.df["symbol"]==symbol].copy()
         if not self.__is_scaled.get(symbol, False):
+            logger.debug(f'symbol is not scaled: {symbol}')
             tmpdf = adjust_and_log(tmpdf)
             self.df.loc[self.df["symbol"]==symbol] = tmpdf
             self.__is_scaled[symbol] = True

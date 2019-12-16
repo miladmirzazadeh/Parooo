@@ -172,11 +172,10 @@ class Crawl2DF:
         if len(self.dm.df) == 0:
             conv_start_date = self.START_DATE
         else:
-            conv_start_date = f''' {self.dm.df.iloc[-1].year}-{self.dm.df.iloc[-1].month}-{self.dm.df.iloc[-1].day} '''
-        logger.debug(f"converter_start_date: {conv_start_date}----START_DATE: {self.START_DATE}", feature="f-strings")
+            conv_start_date = f'''{self.dm.df.iloc[-1].year}-{self.dm.df.iloc[-1].month}-{self.dm.df.iloc[-1].day} '''
         st_year, st_month, st_day = conv_start_date.split("-")
-        st = JalaliDate(st_year, st_month, st_day)
-        logger.debug(f"st: {str(st)}", feature="f-strings")
+        st = JalaliDate(st_year, st_month, st_day) + timedelta(days=1)
+        logger.debug(f"start date: {str(st)}")
         while st <= crawl_start_date:
             excel_file = f'{self.excel_location}/{st.year}-{st.month}-{st.day}.xlsx'
             logger.debug(f'excel_file: {excel_file}', feature="f-strings")
@@ -199,6 +198,7 @@ class Crawl2DF:
         logger.debug("starting df updater")
         
         all_dfs = []
+        time.sleep(10)
         while True:
             dftmp, nametmp = self.q_dfs.get()
             logger.debug(f'got a df: {nametmp}', feature="f-strings")
