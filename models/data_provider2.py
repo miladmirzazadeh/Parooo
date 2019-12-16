@@ -3,7 +3,7 @@ import pandas as pd
 from khayyam import JalaliDate, JalaliDatetime
 import pystore
 from tqdm import tqdm, trange
-from loguru import logger
+
 
 def add_diff_min_max(df):
     df.loc[:, "diff_min_max"] = (df['max']-df['min'])*100/(df['min'])
@@ -41,45 +41,38 @@ def add_log_adj(df):
     df.loc[:, "log_adj_max"] = np.log10(np.maximum(df["adj_max"], 1))
 
 def adjust_and_log(df):
-    logger.debug("calculating scale")
     add_adjust_scale(df)
-    logger.debug("adding adjust")
     add_adjust(df)
-    logger.debug("adding log")
     add_log_adj(df)
-    logger.debug(f"done ajd and log for {df.symbol[0]}")
     return df
 
 class DataModel:
     TA_SYMBOLS = ["خپارس", "خكاوه", "فاسمين", "شبريز", "ونوين", "كنور", "ثشرق", "كاما", "ورنا", "خمحركه", "دامين",
                   "خاور", "خودرو", "فجام", "وبصادر"]
 
-    def __init__(self, pystore_path='/home/nimac/.pystore',
+    def __init__(self, data_location, file_names=[], pystore_path='/home/nimac/.pystore',
                  store_name='tradion_store', collection_name='boors', item_name='ALL'):
+        self.data_location = data_location;
+        self.file_names = file_names;
         pystore.set_path(pystore_path)
         self.store_name = store_name
         self.collection_name = collection_name
         self.item_name = item_name
         self.__is_scaled = {}
     
-    def __read_csv(self, data_location, file_name):
-        return pd.read_csv(f'{data_location}/{file_name}', sep=',',header=[0],
+    def __read_csv(self, file_name):
+        return pd.read_csv(f'{self.data_location}/{file_name}', sep=',',header=[0],
                            parse_dates=["date"])
     
     def adjust_all(self):
-        logger.debug(f"number of symbols for adjust: {len(self.symbols)}")
         for i in trange(len(self.symbols)):
-            try:                
+            try:
                 df = self.df.loc[self.df["symbol"]==self.symbols[i]].copy()
                 if df.shape[0] > 0:
-                    logger.debug(f"start ajd and log for {self.symbols[i]}---->{i}")
                     df = adjust_and_log(df)
                     self.df.loc[self.df["symbol"]==self.symbols[i]] = df
-                else:
-                    logger.debug(f"empty df in adjust all {self.symbols[i]}---->{i}")
             except:
-                logger.error(f'cant adjust {i}-th symbol---->{self.symbols[i]}', feature='f-strings')
-                raise Exception('WTF')
+                print(i, self.symbols[i])
     
     def initialize(self):
         add_diff_min_max(self.df)
@@ -97,15 +90,11 @@ class DataModel:
         self.initialize()
         self.adjust_all()
     
-    def read_from_csvs(self, data_location, file_names=[]):
+    def read(self):
         dfs = []
-        for name in file_names:
-            dfs.append(self.__read_csv(data_location, name))
+        for name in self.file_names:
+            dfs.append(self.__read_csv(name))
         self.df = pd.concat(dfs, ignore_index=True)
-        self.initialize()
-    
-    def read_from_df(self, df):
-        self.df = df
         self.initialize()
 
     def store_in_pystore(self):
@@ -129,6 +118,7 @@ class DataModel:
         self.store_in_pystore()
     
     def get(self, symbol, start="", end=""):
+        
         if start == "":
             start = self.df.index[0]
         else:
@@ -139,8 +129,8 @@ class DataModel:
         else:
             e_date = end.split("-")
             end = JalaliDate(e_date[0], e_date[1], e_date[2]).todate()
-        tmpdf = self.df.loc[self.df["symbol"]==symbol].copy()
-        if not self.__is_scaled.get(symbol, False):
+        tmpdf = self.df.loc[self.df["symbol"]==symbol]
+        if(not self.__is_scaled.get(symbol, False)):
             tmpdf = adjust_and_log(tmpdf)
             self.df.loc[self.df["symbol"]==symbol] = tmpdf
             self.__is_scaled[symbol] = True
