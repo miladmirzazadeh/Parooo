@@ -15,12 +15,12 @@ def add_adjust_scale(df_symbol):
     new_part = pd.isna(df_symbol["adj_scale"])
     if new_part.sum() > 0:
         lastdays = df_symbol.loc[new_part, "lastday"].copy()
-        lastday = lastdays.drop(lastday.index[0])
+        lastdays = lastdays.drop(lastdays.index[0])
         endings = df_symbol.loc[new_part, "ending"].copy()
         endings = endings.drop(endings.index[-1])
         endings.index = lastdays.index
         scale = lastdays/endings
-        scale.loc[endings.index[0]] = 1
+        scale.loc[df_symbol.index[0]] = 1
         df_symbol.loc[new_part, "adj_scale"] = scale.values
     
 def add_adjust(df):
@@ -50,6 +50,8 @@ def add_log_adj(df):
         df.loc[new_part, "log_adj_max"] = np.log10(np.maximum(df.loc[new_part, "adj_max"], 1))
 
 def adjust_and_log(df):
+    if df.shape[0] < 10:
+        return df
     logger.debug("calculating scale")
     add_adjust_scale(df)
     logger.debug("adding adjust")
@@ -64,7 +66,7 @@ class DataModel:
                   "خاور", "خودرو", "فجام", "وبصادر"]
 
     def __init__(self, pystore_path='/home/nimac/.pystore',
-                 store_name='tradion_store', collection_name='boors', item_name='ALL'):
+                 store_name='tradion', collection_name='boors', item_name='ALL'):
         pystore.set_path(pystore_path)
         self.store_name = store_name
         self.collection_name = collection_name
@@ -77,7 +79,7 @@ class DataModel:
     
     def adjust_all(self):
         logger.info(f"number of symbols for adjust: {len(self.symbols)}")
-        for i in trange(len(self.symbols)):
+        for i in range(len(self.symbols)):
             try:
                 df = self.df.loc[self.df["symbol"]==self.symbols[i]].copy()
                 if df.shape[0] > 0:
@@ -125,8 +127,12 @@ class DataModel:
     def restore_from_pystore(self):
         self.store = pystore.store(self.store_name)
         self.collection = self.store.collection(self.collection_name)
-        self.item = self.collection.item(self.item_name)
-        self.df = self.item.to_pandas()
+        if self.item_name in self.collection.list_items():
+            self.item = self.collection.item(self.item_name)
+            self.df = self.item.to_pandas()
+        else:
+            self.df = pd.DataFrame([])
+            self.collection.write(self.item_name, self.df, metadata={'source': 'tsetmc'}, overwrite=True)
         
     def delete_pystore_item(self):
         self.store = pystore.store(self.store_name)

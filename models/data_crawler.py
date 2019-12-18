@@ -50,7 +50,7 @@ class Crawler:
             if jalaldate.weekday() < 5 and not Path(f'{self.excel_location}/{year}-{month}-{day}.xlsx').is_file():
                 self.fetch(year=year, month=month, day=day)
                 q_xls.put([f'{year}-{month}-{day}'])
-                time.sleep(5)
+                time.sleep(10)
             now = now + timedelta(days=1)
 
     def crawling_thread(self, thread_name, start_date, q_xls):
@@ -150,7 +150,7 @@ class Crawl2DF:
         self.conv_workers = []
         self.NUM_CONV_THREAD = NUM_CONV_THREAD
         self.START_DATE = "1380-01-05"
-        self.excel_location = "../../xcels"
+        self.excel_location = "../excels"
 #         !export excelLocation="../../xcels"
 #         !ls $xcelLocation | grep ".xlsx" > xlFiles
 #         tmp = !cat xlFiles
@@ -166,7 +166,7 @@ class Crawl2DF:
                 lines = statfile.readlines()
                 year, month, day = lines[3].split("-")
                 crawl_start_date = JalaliDate(year, month, day)
-            logger.info(f"statefile: {str(crawl_start_date)}  {year}-{month}-{day}", feature="f-strings")
+            logger.info(f"statefile: {str(crawl_start_date)}  {year}-{month}-{day}")
         else:
             year, month, day = self.START_DATE.split("-")
             crawl_start_date = JalaliDate(year, month, day)

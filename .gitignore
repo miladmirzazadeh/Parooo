@@ -6,3 +6,7 @@ __pycache__
 *.csv
 models/others/*
 *.log
+log/
+log/*
+excels
+excels/*
