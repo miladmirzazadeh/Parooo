@@ -36,13 +36,15 @@ def add_adjust(df):
         adj_headers = ["adj_min", "adj_max", "adj_close", "adj_open", "adj_ending"]
         for date in adj:
             logger.debug(f"found adj date: {date}")
-            scale = df.loc[date, "adj_scale"]
-            df.loc[df.index[0]:date, adj_headers] = df.loc[df.index[0]:date, adj_headers] * scale
+            scales = df.loc[date, "adj_scale"]
+            if type(scales) != pd.Series:
+                scales = [scales]
+            for scale in scales:
+                df.loc[df.index[0]:date, adj_headers] = df.loc[df.index[0]:date, adj_headers] * scale
 
 def add_log_adj(df):
-    new_part = pd.isna(df["adj_ending"])
+    new_part = pd.isna(df["log_adj_ending"])
     if new_part.sum() > 0:
-        adj = df.loc[np.logical_and(df["adj_scale"] < 1, new_part)].index
         df.loc[new_part, "log_adj_open"] = np.log10(np.maximum(df.loc[new_part, "adj_open"], 1))
         df.loc[new_part, "log_adj_close"] = np.log10(np.maximum(df.loc[new_part, "adj_close"], 1))
         df.loc[new_part, "log_adj_ending"] = np.log10(np.maximum(df.loc[new_part, "adj_ending"], 1))
@@ -52,6 +54,7 @@ def add_log_adj(df):
 def adjust_and_log(df):
     if df.shape[0] < 10:
         return df
+    logger.debug(f"start adjust and log for {df.iloc[0]['symbol']}")
     logger.debug("calculating scale")
     add_adjust_scale(df)
     logger.debug("adding adjust")
@@ -114,6 +117,16 @@ class DataModel:
             dfs.append(self.__read_csv(data_location, name))
         self.df = pd.concat(dfs, ignore_index=True)
         self.initialize()
+    
+    def save_to_csvs(self, data_location, file_name, chunk_size):
+        i = 0
+        while i*chunk_size < len(self.df):
+            if (i+1)*chunk_size < len(self.df):
+                df_i = self.df.iloc[i*chunk_size:(i+1)*chunk_size]
+            else:
+                df_i = self.df.iloc[i*chunk_size:]
+            df_i.to_csv(f'{data_location}/{file_name}{i}.csv', header=self.df.columns, encoding='utf-8', index=False)
+            i += 1
     
     def read_from_df(self, df):
         self.df = df

@@ -1,5 +1,3 @@
-
-
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
@@ -10,11 +8,10 @@ import trade_model as td
 import matplotlib.pyplot as plt
 
 
-
 def find_supports(firstdate,lastdate,stockname="خساپا",minimum_touch=3):
-    dm=td.DataModel("../xcels",["master0.csv","master1.csv"])
-    dm.read()
-    df=dm.get("خساپا",firstdate,lastdate)
+    dm =td.DataModel()
+    dm.read_csv("../xcels",["master0.csv","master1.csv"])
+    df = dm.get("خساپا",firstdate,lastdate)
     stocko=df["open"].tolist()
     stockc=df["close"].tolist()
     dates=df.index # for converting startm s to real date .... startm and stopm s are some indexes of stoko array
@@ -23,7 +20,7 @@ def find_supports(firstdate,lastdate,stockname="خساپا",minimum_touch=3):
     lows_price=[]
     for j in range(len(stocko)): 
         minimum=min(stocko[j],stockc[j])
-        if ( (j >10) and (j+10 < len(stocko)) ):
+        if (j >10) and (j+10 < len(stocko)):
             if (minimum<=min(stocko[j-10:j+10]) and minimum<=min(stockc[j-10:j+10])):
                 lows.append(j)
                 lows_price.append(minimum)

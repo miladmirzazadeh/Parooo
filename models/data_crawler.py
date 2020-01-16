@@ -199,7 +199,7 @@ class Crawl2DF:
         self.crawl_thread.start()
         logger.info("df crawler started")
         all_dfs = []
-        time.sleep(10)
+        time.sleep(60)
         while True:
             dftmp, nametmp = self.q_dfs.get()
             logger.info(f'got a df: {nametmp}')
@@ -221,14 +221,19 @@ class Crawl2DF:
             logger.debug(f'added df: {nametmp}---{str(date)} with len({len(dftmp)}) all:{len(self.dm.df)}', feature="f-strings")
             logger.debug(f'df left: {self.q_dfs.qsize()}', feature="f-strings")
             if self.q_dfs.empty() or self.q_dfs.qsize() == 0:
-                dm_new = DataModel()
-                dm_new.read_from_df(pd.concat(all_dfs).sort_index())
-                self.dm.df = self.dm.df.append(dm_new.df)
-                all_dfs = []
-                logger.info(f'storing in pystore')
-                self.dm.update_df_extensions()
-                self.dm.store_in_pystore()
-                logger.info(f'stored in pystore')
+                try:
+                    dm_new = DataModel()
+                    dm_new.read_from_df(pd.concat(all_dfs).sort_index())
+                    self.dm.df = self.dm.df.append(dm_new.df)
+                    all_dfs = []
+                    logger.info(f'storing in pystore')
+                    self.dm.update_df_extensions()
+                    self.dm.store_in_pystore()
+                    logger.info(f'stored in pystore')
+                    self.dm.save_to_csvs(self.excel_location, "master", 1000000)
+                    logger.info(f'stored in file')
+                except:
+                    logger.exception(f'cant save df')
 
     def save(self):
         self.dm.df.sort_values(by=['date'], inplace=True)
