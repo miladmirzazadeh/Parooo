@@ -92,7 +92,7 @@ class DataModel:
                 else:
                     logger.debug(f"empty df in adjust all {self.symbols[i]}---->{i}")
             except:
-                logger.error(f'cant adjust {i}-th symbol---->{self.symbols[i]}', feature='f-strings')
+                logger.exception(f'cant adjust {i}-th symbol---->{self.symbols[i]}', feature='f-strings')
     
     def initialize(self):
         add_diff_min_max(self.df)
@@ -125,7 +125,7 @@ class DataModel:
                 df_i = self.df.iloc[i*chunk_size:(i+1)*chunk_size]
             else:
                 df_i = self.df.iloc[i*chunk_size:]
-            df_i.to_csv(f'{data_location}/{file_name}{i}.csv', header=self.df.columns, encoding='utf-8', index=False)
+            df_i.to_csv(f'{data_location}/{file_name}{i}.csv', header=self.df.columns, encoding='utf-8')
             i += 1
     
     def read_from_df(self, df):

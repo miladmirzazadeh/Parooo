@@ -88,10 +88,9 @@ class Converter:
                 df = pd.read_excel(f'{self.excel_location}/{excel_filename}.xlsx', header=[0],
                                    skiprows=[0,1], convert_float=False)
                 df.columns = self.HEADER
-                df.to_csv(f'{self.excel_location}/{excel_filename}.csv', encoding='utf-8', index=False, 
-                          header=self.HEADER)
+                df.to_csv(f'{self.excel_location}/{excel_filename}.csv', encoding='utf-8', index=False, header=self.HEADER)
         except:
-            logger.error(f"convert and save problem for file {excel_filename}")
+            logger.exception(f"convert and save problem for file {excel_filename}")
             df = str(excel_filename)
         finally:
             return df
@@ -214,8 +213,13 @@ class Crawl2DF:
             dftmp["day"] = daylist
             dftmp["date"] = datelist
             dftmp["date"] = pd.to_datetime(dftmp["date"])
+            dftmp["symbol"] = dftmp.symbol.apply(str)
+            dftmp["name"] = dftmp["name"].apply(str)
             dftmp = dftmp.astype({"year": int, "month": int, "day": int})
-            dftmp = dftmp.set_index('date')
+            dftmp["index_date"] = dftmp["date"]
+            dftmp["index_symbol"] = dftmp["symbol"]
+#             dftmp = dftmp.set_index(['index_symbol', 'index_date'])
+            dftmp = dftmp.set_index('index_date')
             all_dfs.append(dftmp)
             self.q_dfs.task_done()
             logger.debug(f'added df: {nametmp}---{str(date)} with len({len(dftmp)}) all:{len(self.dm.df)}', feature="f-strings")
