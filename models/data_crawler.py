@@ -1,7 +1,7 @@
 from khayyam import JalaliDate, JalaliDatetime
 from datetime import date, timedelta, datetime
 from requests import Session, Request
-from data_provider import DataModel
+from data_provider_new import DataModel
 from tqdm import tqdm, trange
 from threading import Thread
 from loguru import logger
@@ -14,9 +14,6 @@ import pystore
 import pickle
 import time
 import os
-
-
-
 
 class Crawler:
     
@@ -76,10 +73,6 @@ class Crawler:
 class Converter:
     def __init__(self, excel_location):
         self.excel_location = excel_location
-        self.HEADER = ["symbol", "name", "amount", "volume", "value", "lastday", "open", "close",
-         "last-change", "last-percent", "ending", "ending-change", "ending-percent",
-         "min", "max",]
-        self.HEADER_EXTRA = self.HEADER + ["year", "month", "day", "date"]
     
     def convert_and_save(self, excel_filename, return_all=False):
         xl = None
@@ -87,8 +80,8 @@ class Converter:
             if (not os.path.isfile(f'{self.excel_location}/{excel_filename}.csv')) or return_all:
                 df = pd.read_excel(f'{self.excel_location}/{excel_filename}.xlsx', header=[0],
                                    skiprows=[0,1], convert_float=False)
-                df.columns = self.HEADER
-                df.to_csv(f'{self.excel_location}/{excel_filename}.csv', encoding='utf-8', index=False, header=self.HEADER)
+                df.columns = DataModel.HEADER
+                df.to_csv(f'{self.excel_location}/{excel_filename}.csv', encoding='utf-8', index=False, header=DataModel.HEADER)
         except:
             logger.exception(f"convert and save problem for file {excel_filename}")
             df = str(excel_filename)
@@ -135,7 +128,7 @@ class Converter:
             else:
                 df_i = self.dm.df.iloc[i*chunkSize:]
             df_i.to_csv(f'{self.ex}master{i}.csv',
-                        header=HEADER_extra, encoding='utf-8', index=False)
+                        header=DataModel.HEADER_extra, encoding='utf-8', index=False)
             i += 1        
     
     
@@ -150,11 +143,6 @@ class Crawl2DF:
         self.NUM_CONV_THREAD = NUM_CONV_THREAD
         self.START_DATE = "1380-01-05"
         self.excel_location = "../excels"
-#         !export excelLocation="../../xcels"
-#         !ls $xcelLocation | grep ".xlsx" > xlFiles
-#         tmp = !cat xlFiles
-#         self.names = [name[:-5] for name in tmp]
-        
         self.crawler = Crawler(excel_location=self.excel_location)
         self.converter = Converter(excel_location=self.excel_location)
 
@@ -195,10 +183,10 @@ class Crawl2DF:
         logger.info("df conv started")
         self.crawl_thread = multiprocessing.Process(target=self.crawler.crawling_thread,
                                                     args=("Thread-crawl", crawl_start_date.todate(), self.q_xls))
+        time.sleep(60)
         self.crawl_thread.start()
         logger.info("df crawler started")
         all_dfs = []
-        time.sleep(60)
         while True:
             dftmp, nametmp = self.q_dfs.get()
             logger.info(f'got a df: {nametmp}')
@@ -216,10 +204,7 @@ class Crawl2DF:
             dftmp["symbol"] = dftmp.symbol.apply(str)
             dftmp["name"] = dftmp["name"].apply(str)
             dftmp = dftmp.astype({"year": int, "month": int, "day": int})
-            dftmp["index_date"] = dftmp["date"]
-            dftmp["index_symbol"] = dftmp["symbol"]
-#             dftmp = dftmp.set_index(['index_symbol', 'index_date'])
-            dftmp = dftmp.set_index('index_date')
+            dftmp = dftmp.set_index(['symbol', 'date'])
             all_dfs.append(dftmp)
             self.q_dfs.task_done()
             logger.debug(f'added df: {nametmp}---{str(date)} with len({len(dftmp)}) all:{len(self.dm.df)}', feature="f-strings")
@@ -229,9 +214,10 @@ class Crawl2DF:
                     dm_new = DataModel()
                     dm_new.read_from_df(pd.concat(all_dfs).sort_index())
                     self.dm.df = self.dm.df.append(dm_new.df)
+                    print(self.dm.df)
                     all_dfs = []
-                    logger.info(f'storing in pystore')
                     self.dm.update_df_extensions()
+                    logger.info(f'storing in pystore')
                     self.dm.store_in_pystore()
                     logger.info(f'stored in pystore')
                     self.dm.save_to_csvs(self.excel_location, "master", 1000000)

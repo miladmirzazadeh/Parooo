@@ -5,11 +5,13 @@ import pystore
 from tqdm import tqdm, trange
 from loguru import logger
 
+idx = pd.IndexSlice
+
 def add_diff_min_max(df):
-    df.loc[:, "diff_min_max"] = (df['max']-df['min'])*100/(df['min'])
+    df["diff_min_max"] = (df['max']-df['min'])*100/(df['min'])
 
 def add_diff_ending(df):
-    df.loc[:, "diff_open"] = (df['lastday']-df['ending'])*100/(df['lastday'])
+    df["diff_open"] = (df['lastday']-df['ending'])*100/(df['lastday'])
 
 def add_adjust_scale(df_symbol):
     new_part = pd.isna(df_symbol["adj_scale"])
@@ -54,7 +56,6 @@ def add_log_adj(df):
 def adjust_and_log(df):
     if df.shape[0] < 10:
         return df
-    logger.debug(f"start adjust and log for {df.iloc[0]['symbol']}")
     logger.debug("calculating scale")
     add_adjust_scale(df)
     logger.debug("adding adjust")
@@ -68,27 +69,32 @@ class DataModel:
     TA_SYMBOLS = ["خپارس", "خكاوه", "فاسمين", "شبريز", "ونوين", "كنور", "ثشرق", "كاما", "ورنا", "خمحركه", "دامين",
                   "خاور", "خودرو", "فجام", "وبصادر"]
 
+    HEADER = ["symbol", "name", "amount", "volume", "value", "lastday", "open", "close",
+         "last-change", "last-percent", "ending", "ending-change", "ending-percent",
+         "min", "max",]
+    HEADER_EXTRA = HEADER + ["year", "month", "day", "date"]
+    
     def __init__(self, pystore_path='/home/nimac/.pystore',
                  store_name='tradion', collection_name='boors', item_name='ALL'):
         pystore.set_path(pystore_path)
         self.store_name = store_name
         self.collection_name = collection_name
         self.item_name = item_name
-        self.__is_scaled = {}
+        self.symbols = []
     
     def __read_csv(self, data_location, file_name):
-        return pd.read_csv(f'{data_location}/{file_name}', sep=',',header=[0],
+        return pd.read_csv(f'{data_location}/{file_name}.csv', sep=',',header=[0],
                            parse_dates=["date"])
     
     def adjust_all(self):
         logger.info(f"number of symbols for adjust: {len(self.symbols)}")
         for i in range(len(self.symbols)):
             try:
-                df = self.df.loc[self.df["symbol"]==self.symbols[i]].copy()
+                df = self.df.loc[[self.symbols[i]]].copy()
                 if df.shape[0] > 0:
-                    logger.debug(f"start adj and log for {self.symbols[i]}---->{i}")
+                    logger.debug(f"start adj and log for {self.symbols[i]} ----> {i}  total: {len(self.symbols)}")
                     df = adjust_and_log(df)
-                    self.df.loc[self.df["symbol"]==self.symbols[i]] = df
+                    self.df.loc[self.symbols[i]] = df
                 else:
                     logger.debug(f"empty df in adjust all {self.symbols[i]}---->{i}")
             except:
@@ -97,15 +103,15 @@ class DataModel:
     def initialize(self):
         add_diff_min_max(self.df)
         add_diff_ending(self.df)
-        if 'date' in self.df.columns:
-            self.df = self.df.set_index('date')
-        self.symbols = self.df["symbol"].unique()
+        if 'date' in self.df.columns and 'symbol' in self.df.columns:
+            self.df = self.df.set_index(['symbol','date'])
+        self.symbols = self.df.index.get_level_values("symbol").unique()
         other_headers = ["adj_min", "adj_max", "adj_close", "adj_open", "adj_ending", "log_adj_open",
                          "log_adj_close", "log_adj_ending", "log_adj_min", "log_adj_max", "adj_scale"]
         for col in other_headers:
             if col not in self.df.columns:
                 self.df[col] = np.nan
-        self.df.drop_duplicates(subset=["symbol", "name", "year", "month", "day"], keep="last",inplace=True)
+        self.df = self.df.loc[~self.df.index.duplicated(keep='last')]
             
     def update_df_extensions(self):
         self.initialize()
@@ -135,14 +141,19 @@ class DataModel:
     def store_in_pystore(self):
         self.store = pystore.store(self.store_name)
         self.collection = self.store.collection(self.collection_name)
-        self.collection.write(self.item_name, self.df, metadata={'source': 'tsetmc'}, overwrite=True)
+        self.collection.write(self.item_name, self.df.reset_index(), metadata={'source': 'tsetmc'}, overwrite=True)
     
     def restore_from_pystore(self):
         self.store = pystore.store(self.store_name)
         self.collection = self.store.collection(self.collection_name)
         if self.item_name in self.collection.list_items():
             self.item = self.collection.item(self.item_name)
-            self.df = self.item.to_pandas()
+            if self.item.data.shape[1] > 0:
+                self.df = self.item.to_pandas()
+                self.df.set_index(["symbol", "date"], inplace=True)
+            else:
+                self.df = pd.DataFrame([])
+                self.collection.write(self.item_name, self.df, metadata={'source': 'tsetmc'}, overwrite=True)
         else:
             self.df = pd.DataFrame([])
             self.collection.write(self.item_name, self.df, metadata={'source': 'tsetmc'}, overwrite=True)
@@ -157,46 +168,22 @@ class DataModel:
         self.store_in_pystore()
     
     def get(self, symbol, start="", end=""):
+        tmpdf = self.df.loc[symbol].copy()
         if start == "":
-            start = self.df.index[0]
+            start = tmpdf.index[0]
         else:
             s_date = start.split("-")
             start = JalaliDate(s_date[0], s_date[1], s_date[2]).todate()
         if end == "":
-            end = self.df.index[-1]
+            end = tmpdf.index[-1]
         else:
             e_date = end.split("-")
             end = JalaliDate(e_date[0], e_date[1], e_date[2]).todate()
-        tmpdf = self.df.loc[self.df["symbol"]==symbol].copy()
-        if not self.__is_scaled.get(symbol, False):
-            logger.debug(f'symbol is not scaled: {symbol}')
-            tmpdf = adjust_and_log(tmpdf)
-            self.df.loc[self.df["symbol"]==symbol] = tmpdf
-            self.__is_scaled[symbol] = True
-        return tmpdf.loc[start:end]
-    
-    def check_contains_name(self, symbol):
-        dm.df.loc[dm.df["symbol"].str.contains(symbol)==True]
+        return tmpdf.loc[start:end].copy()
         
     def get_overal_corr(self, symbols):
         df_corr = pd.DataFrame()
         for symbol in symbols:
             df_corr[f'{symbol}_log_adj_ending'] = self.get(symbol)["log_adj_ending"]
         return df_corr.corr()
-    
-#         print("hi")
-#         self.df = self.df.groupby("symbol").apply(add_adjust_scale)
-#         self.allSymbols = self.df.symbol.tolist()
-#         self.symbols = list(set(self.df.symbol))[1:]
-#         for symbol in self.symbols:
-#         counts = Counter(self.allSymbols)
-#         testSymbols = []
-#         tmpSymbols = []
-#         for symbol in symbols:
-#             if counts[symbol] > RECORD_THRESHOLD:
-#                 tmpSymbols.append(symbol)
-#         for i in range(TESTCASE_NUMBER):
-#             ran = random.randint(0, len(tmpSymbols)-1)
-#             testSymbols.append(tmpSymbols[ran])
-#             tmpSymbols.remove(tmpSymbols[ran])
-#         print("test symbol", len(testSymbols))
+
