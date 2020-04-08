@@ -1,9 +1,9 @@
 from khayyam import JalaliDate, JalaliDatetime
 from datetime import date, timedelta, datetime
 from requests import Session, Request
-from data_provider_new import DataModel
 from tqdm import tqdm, trange
 from threading import Thread
+from data_provider import *
 from loguru import logger
 from pathlib import Path
 from queue import Queue
@@ -80,8 +80,8 @@ class Converter:
             if (not os.path.isfile(f'{self.excel_location}/{excel_filename}.csv')) or return_all:
                 df = pd.read_excel(f'{self.excel_location}/{excel_filename}.xlsx', header=[0],
                                    skiprows=[0,1], convert_float=False)
-                df.columns = DataModel.HEADER
-                df.to_csv(f'{self.excel_location}/{excel_filename}.csv', encoding='utf-8', index=False, header=DataModel.HEADER)
+                df.columns = DataModel.INITIAL_HEADER
+                df.to_csv(f'{self.excel_location}/{excel_filename}.csv', encoding='utf-8', index=False, header=DataModel.INITIAL_HEADER)
         except:
             logger.exception(f"convert and save problem for file {excel_filename}")
             df = str(excel_filename)
@@ -117,19 +117,7 @@ class Converter:
 
     def error_cleaner(self):
         for name in errors:
-            os.remove(f'{self.excel_location}/{name}.xlsx')
-
-    
-    def save_csv(self):
-        i = 0
-        while i*chunkSize < len(self.dm.df):
-            if (i+1)*chunkSize < len(self.dm.df):
-                df_i = self.dm.df.iloc[i*chunkSize:(i+1)*chunkSize]
-            else:
-                df_i = self.dm.df.iloc[i*chunkSize:]
-            df_i.to_csv(f'{self.ex}master{i}.csv',
-                        header=DataModel.HEADER_extra, encoding='utf-8', index=False)
-            i += 1        
+            os.remove(f'{self.excel_location}/{name}.xlsx')  
     
     
 class Crawl2DF:
@@ -163,7 +151,10 @@ class Crawl2DF:
         if len(self.dm.df) == 0:
             conv_start_date = self.START_DATE
         else:
-            conv_start_date = f'''{self.dm.df.iloc[-1].year}-{self.dm.df.iloc[-1].month}-{self.dm.df.iloc[-1].day} '''
+            index_list = list(set(self.dm.df.index.get_level_values("date")))
+            index_list.sort()
+            last_ind = index_list[-1]
+            conv_start_date = f'''{last_ind.year}-{last_ind.month}-{last_ind.day} '''
         st_year, st_month, st_day = conv_start_date.split("-")
         st = JalaliDate(st_year, st_month, st_day) + timedelta(days=1)
         logger.info(f"start date: {str(st)}")
@@ -211,16 +202,46 @@ class Crawl2DF:
             logger.debug(f'df left: {self.q_dfs.qsize()}', feature="f-strings")
             if self.q_dfs.empty() or self.q_dfs.qsize() == 0:
                 try:
+                    models = [
+                        SignalUSD(),
+                        SignalPound(),
+                        SignalYuan(),
+                        SignalEuro(),
+                        SignalYen100(),
+                        SignalRub(),
+                        SignalDeram(),
+                        SignalNGas(),
+                        SignalBrent(),
+                        SignalGasOil(),
+                        SignalPetrol(),
+                        SignalWTI(),
+                        SignalOnsSilver(),
+                        SignalOnsPalladium(),
+                        SignalOnsPlatinum(),
+                        SignalOnsGold(),
+                        SignalElementCopper(),
+                        SignalElementZinc(),
+                        SignalElementAluminum(),
+                        SignalElementLead(),
+                        SignalEthereum(),
+                        SignalBitcoin(),
+                        SignalXRP(),
+                    ]
+                    for x in models:
+                        x.update_data()
+                        x.store_in_pystore()
+                        x.save_to_csvs()
+                        time.sleep(5)
+
                     dm_new = DataModel()
                     dm_new.read_from_df(pd.concat(all_dfs).sort_index())
                     self.dm.df = self.dm.df.append(dm_new.df)
-                    print(self.dm.df)
                     all_dfs = []
                     self.dm.update_df_extensions()
                     logger.info(f'storing in pystore')
                     self.dm.store_in_pystore()
                     logger.info(f'stored in pystore')
-                    self.dm.save_to_csvs(self.excel_location, "master", 1000000)
+                    self.dm.save_to_csvs()
                     logger.info(f'stored in file')
                 except:
                     logger.exception(f'cant save df')
