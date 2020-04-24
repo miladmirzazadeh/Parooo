@@ -13,3 +13,5 @@ excels/*
 *.jpg
 *.png
 *.jpeg
+proxies*.txt
+scylla.db

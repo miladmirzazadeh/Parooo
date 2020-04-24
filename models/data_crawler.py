@@ -64,11 +64,10 @@ class Crawler:
                     print(lastcheck, file=statfile)
                     print("last crawl:", file=statfile)
                     print(end_date_jalali, file=statfile)
-            if JalaliDatetime.now().hour < 14:
-                time.sleep((14 - JalaliDatetime.now().hour) * 3600 + 100)
+            if JalaliDatetime.now().hour < 16:
+                time.sleep((16 - JalaliDatetime.now().hour) * 3600 + 100)
             else:
-                time.sleep((38 - JalaliDatetime.now().hour) * 3600 + 100)
-
+                time.sleep((40 - JalaliDatetime.now().hour) * 3600 + 100)
 
 class Converter:
     def __init__(self, excel_location):
@@ -128,12 +127,30 @@ class Crawl2DF:
         self.q_dfs = self.m.Queue()
         self.q_errors = self.m.Queue()
         self.conv_workers = []
+        self.data_model_updater_workers = []
         self.NUM_CONV_THREAD = NUM_CONV_THREAD
         self.START_DATE = "1380-01-05"
         self.excel_location = "../excels"
         self.crawler = Crawler(excel_location=self.excel_location)
         self.converter = Converter(excel_location=self.excel_location)
 
+    def data_models_updater(self, thread_name, models):
+        while True:
+            try:
+                logger.debug(f"updating data model {thread_name}")
+                for x in models:
+                    x.update_data()
+                    x.store_in_pystore()
+                    x.save_to_csvs()
+                    time.sleep(5)
+                if JalaliDatetime.now().hour < 16:
+                    time.sleep((16 - JalaliDatetime.now().hour) * 3600 + 100)
+                else:
+                    time.sleep((40 - JalaliDatetime.now().hour) * 3600 + 100)
+            except:
+                logger.exception("WTF in data_model_updater")
+
+        
     def run(self):
         logger.info("run-triggered")
         if os.path.exists(f'{self.excel_location}/crawlstat'):
@@ -168,10 +185,45 @@ class Crawl2DF:
         
         logger.info("preparing done")
         for i in range(self.NUM_CONV_THREAD):
-            self.conv_workers.append(multiprocessing.Process(target=self.converter.converting_thread, args=(f'Thread-i', 
+            self.conv_workers.append(multiprocessing.Process(target=self.converter.converting_thread, args=(f'Thread-{i}', 
                     self.q_xls, self.q_dfs, self.q_errors)))
             self.conv_workers[i].start()
         logger.info("df conv started")
+        models = [
+                SignalUSD(),
+                SignalPound(),
+                SignalYuan(),
+                SignalEuro(),
+                SignalYen100(),
+                SignalRub(),
+                SignalDeram(),
+                SignalNGas(),
+                SignalBrent(),
+                SignalGasOil(),
+                SignalPetrol(),
+                SignalWTI(),
+                SignalOnsSilver(),
+                SignalOnsPalladium(),
+                SignalOnsPlatinum(),
+                SignalOnsGold(),
+                SignalElementCopper(),
+                SignalElementZinc(),
+                SignalElementAluminum(),
+                SignalElementLead(),
+                SignalEthereum(),
+                SignalBitcoin(),
+                SignalXRP(),
+                StockMeta(),
+                StockShareHolder(),
+
+        ]
+        self.data_model_updater_workers.append(multiprocessing.Process(target=self.data_models_updater, args=(f'Thread-singal-data', models)))
+        self.data_model_updater_workers.append(multiprocessing.Process(target=self.data_models_updater, args=(f'Thread-client-data', [StockClientsData(use_proxy=True)])))
+        self.data_model_updater_workers.append(multiprocessing.Process(target=self.data_models_updater,
+                                                                       args=(f'Thread-data-model-tgju', [GeneralTGJUData(name, use_proxy=True) for name in GeneralTGJUData.DATA_TYPES])))
+        for worker in self.data_model_updater_workers:
+            worker.start()
+        logger.info(f'done running data model updater')
         self.crawl_thread = multiprocessing.Process(target=self.crawler.crawling_thread,
                                                     args=("Thread-crawl", crawl_start_date.todate(), self.q_xls))
         time.sleep(60)
@@ -202,37 +254,6 @@ class Crawl2DF:
             logger.debug(f'df left: {self.q_dfs.qsize()}', feature="f-strings")
             if self.q_dfs.empty() or self.q_dfs.qsize() == 0:
                 try:
-                    models = [
-                        SignalUSD(),
-                        SignalPound(),
-                        SignalYuan(),
-                        SignalEuro(),
-                        SignalYen100(),
-                        SignalRub(),
-                        SignalDeram(),
-                        SignalNGas(),
-                        SignalBrent(),
-                        SignalGasOil(),
-                        SignalPetrol(),
-                        SignalWTI(),
-                        SignalOnsSilver(),
-                        SignalOnsPalladium(),
-                        SignalOnsPlatinum(),
-                        SignalOnsGold(),
-                        SignalElementCopper(),
-                        SignalElementZinc(),
-                        SignalElementAluminum(),
-                        SignalElementLead(),
-                        SignalEthereum(),
-                        SignalBitcoin(),
-                        SignalXRP(),
-                    ]
-                    for x in models:
-                        x.update_data()
-                        x.store_in_pystore()
-                        x.save_to_csvs()
-                        time.sleep(5)
-
                     dm_new = DataModel()
                     dm_new.read_from_df(pd.concat(all_dfs).sort_index())
                     self.dm.df = self.dm.df.append(dm_new.df)
