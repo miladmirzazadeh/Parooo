@@ -26,7 +26,7 @@ import time
 '''
 
 class ProxyProvider:
-    PROTOCOLS = ["https", "http"]
+    PROTOCOLS = ["https", "http", "socks5"]
     def __init__(self):
         self.ip_q = {}
         self.ip_map = {}
@@ -241,7 +241,7 @@ class ProxyProvider:
                     proxies = {"https": self._get_good_proxy("https", change_priority=False)}
                 else:
                     proxies = None
-                resp = requests.get(url, timeout=15, proxies=proxies)
+                resp = requests.get(f"https://{url}", timeout=15, proxies=proxies)
                 regs = re.findall(r'((?:\d{1,3}\.){3}\d{1,3}):(\d+)', resp.text)
                 for protocol in self.PROTOCOLS:
                     for reg in regs:
@@ -249,14 +249,26 @@ class ProxyProvider:
                 logger.debug(f"done url {url}")
             except:
                 try:
-                    resp = requests.get(url, timeout=15)
+                    if len(self.ip_q["http"]) > 10:
+                        proxies = {"http": self._get_good_proxy("http", change_priority=False)}
+                    else:
+                        proxies = None
+                    resp = requests.get(f"http://{url}", timeout=15, proxies=proxies)
                     regs = re.findall(r'((?:\d{1,3}\.){3}\d{1,3}):(\d+)', resp.text)
                     for protocol in self.PROTOCOLS:
                         for reg in regs:
                             self.add_ip(protocol, reg[0] + ":" + reg[1])
                     logger.debug(f"done url {url}")
                 except:
-                    logger.info(f"bad url {url}")
+                    try:
+                        resp = requests.get(url, timeout=15)
+                        regs = re.findall(r'((?:\d{1,3}\.){3}\d{1,3}):(\d+)', resp.text)
+                        for protocol in self.PROTOCOLS:
+                            for reg in regs:
+                                self.add_ip(protocol, reg[0] + ":" + reg[1])
+                        logger.debug(f"done url {url}")
+                    except:
+                        logger.info(f"bad url {url}")
     
     def thread_update(self):
         time.sleep(10)

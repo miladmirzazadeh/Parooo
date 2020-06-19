@@ -1,4 +1,5 @@
 import requests
+import time
 from loguru import logger
 
 class ProxyProvider:
@@ -33,12 +34,13 @@ class ProxyProvider:
                 logger.debug("cant send bad ip")
                 time.sleep(0.5)
     
-    def get_link(self, url, retry=-1):
+    def get_link(self, url, protocol=None, retry=-1):
         headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Cafari/537.36'}
         if retry < 0:
             retry = -10
         r = None
-        protocol = url.split("://")[0]
+        if not protocol:
+            protocol = url.split("://")[0]
         
         while retry == -10 or retry >= 0:
             proxies = {protocol: self.get_proxy(protocol)}
@@ -59,5 +61,33 @@ class ProxyProvider:
                 logger.debug("retry getting")
             retry = max(-10, retry - 1)
         return r
+    
+    def get_proxy_for_link(self, url, protocol=None, retry=-1):
+        headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Cafari/537.36'}
+        if retry < 0:
+            retry = -10
+        r = None
+        if not protocol:
+            protocol = url.split("://")[0]
+        
+        while retry == -10 or retry >= 0:
+            proxies = {protocol: self.get_proxy(protocol)}
+            try:
+                r = requests.get(f"{protocol}://google.com", headers=headers, proxies=proxies, timeout=10)
+                if "google.com" in r.text:
+                    r = requests.get(url, headers=headers, proxies=proxies, timeout=10)
+                    if r.status_code != 200:
+                        self.bad_ip(protocol, proxies[protocol])
+                        logger.debug("retry getting")
+                    else:
+                        return proxies[protocol]
+                else:
+                    self.bad_ip(protocol, proxies[protocol])
+                    logger.debug("retry getting")
+            except:
+                self.bad_ip(protocol, proxies[protocol])
+                logger.debug("retry getting")
+            retry = max(-10, retry - 1)
+        return None
         
         
